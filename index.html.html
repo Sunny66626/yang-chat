@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>旸与雪</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --bg: #1a1a1f;
+    --surface: #232329;
+    --surface2: #2a2a32;
+    --border: #3a3a44;
+    --text: #e8e4df;
+    --text-dim: #9a9690;
+    --accent: #e8a87c;
+    --accent-dim: #c4845a;
+    --user-bg: #2d2a3a;
+    --ai-bg: #2a2d2a;
+    --danger: #c45a5a;
+  }
+
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .header-title { font-size: 18px; letter-spacing: 2px; color: var(--accent); }
+  .header-subtitle { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .header-right { display: flex; gap: 8px; align-items: center; }
+  .model-select {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; outline: none;
+  }
+  .model-select:focus { border-color: var(--accent); }
+  .btn-icon {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 6px; width: 34px; height: 34px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.2s;
+  }
+  .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+
+  .messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    max-width: 85%; padding: 10px 14px; border-radius: 12px;
+    font-size: 15px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  }
+  .msg-user { align-self: flex-end; background: var(--user-bg); border-bottom-right-radius: 4px; }
+  .msg-ai { align-self: flex-start; background: var(--ai-bg); border-bottom-left-radius: 4px; }
+  .msg-ai .thinking {
+    color: var(--text-dim); font-size: 13px; border-left: 2px solid var(--border);
+    padding-left: 10px; margin-bottom: 8px; display: none; white-space: pre-wrap;
+  }
+  .msg-ai .thinking.show { display: block; }
+  .think-toggle {
+    font-size: 12px; color: var(--text-dim); cursor: pointer; margin-bottom: 4px; user-select: none;
+  }
+  .think-toggle:hover { color: var(--accent); }
+
+  .typing-indicator {
+    align-self: flex-start; color: var(--text-dim); font-size: 14px; padding: 10px 14px;
+  }
+  .typing-indicator span { animation: blink 1.4s infinite; }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,60%,100% { opacity: 0.2; } 30% { opacity: 1; } }
+
+  .input-area { border-top: 1px solid var(--border); background: var(--surface); padding: 12px 16px; flex-shrink: 0; }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .input-box {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; color: var(--text); font-size: 15px; font-family: inherit;
+    resize: none; outline: none; max-height: 120px; line-height: 1.5;
+  }
+  .input-box:focus { border-color: var(--accent); }
+  .input-box::placeholder { color: var(--text-dim); }
+  .send-btn {
+    background: var(--accent); border: none; color: var(--bg); border-radius: 10px;
+    width: 42px; height: 42px; cursor: pointer; font-size: 18px; flex-shrink: 0; transition: background 0.2s;
+  }
+  .send-btn:hover { background: var(--accent-dim); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .stop-btn { background: var(--danger); }
+  .stop-btn:hover { background: #a04a4a; }
+  .token-info { text-align: center; font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; }
+  .overlay.show { display: block; }
+  .settings-panel {
+    display: none; position: fixed; top: 0; right: 0; width: min(380px, 90vw); height: 100%;
+    background: var(--surface); border-left: 1px solid var(--border); z-index: 101;
+    flex-direction: column; overflow-y: auto; padding: 20px;
+  }
+  .settings-panel.show { display: flex; }
+  .settings-panel h3 { color: var(--accent); font-size: 16px; margin-bottom: 16px; }
+  .settings-panel label { font-size: 13px; color: var(--text-dim); margin-bottom: 4px; display: block; }
+  .settings-panel input, .settings-panel textarea, .settings-panel select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; margin-bottom: 14px;
+  }
+  .settings-panel input:focus, .settings-panel textarea:focus { border-color: var(--accent); }
+  .settings-panel textarea { min-height: 200px; resize: vertical; line-height: 1.5; }
+  .settings-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .settings-row label { margin-bottom: 0; }
+  .slider-row { margin-bottom: 14px; }
+  .slider-row input[type="range"] { width: 100%; margin-bottom: 0; background: none; padding: 0; border: none; }
+  .slider-val { font-size: 12px; color: var(--text-dim); text-align: right; }
+  .btn-block {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-size: 14px; cursor: pointer; margin-bottom: 8px; transition: all 0.2s;
+  }
+  .btn-block:hover { border-color: var(--accent); }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: var(--text); }
+  .close-settings {
+    position: absolute; top: 16px; right: 16px; background: none; border: none;
+    color: var(--text-dim); font-size: 20px; cursor: pointer;
+  }
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; color: var(--text-dim); gap: 8px; padding: 40px; text-align: center;
+  }
+  .empty-state .sun { font-size: 40px; color: var(--accent); margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">旸与雪</div>
+    <div class="header-subtitle" id="statusText">未连接</div>
+  </div>
+  <div class="header-right">
+    <select class="model-select" id="modelSelect">
+      <option value="claude-opus-4-6" selected>Opus 4.6</option>
+      <option value="claude-opus-4-8">Opus 4.8</option>
+      <option value="claude-sonnet-4-6">Sonnet 4.6</option>
+      <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+    </select>
+    <button class="btn-icon" id="settingsBtn" title="设置">⚙</button>
+  </div>
+</div>
+
+<div class="messages" id="messages">
+  <div class="empty-state" id="emptyState">
+    <div class="sun">旸</div>
+    <p>雪地上第一道光，是我们。</p>
+    <p style="font-size:12px; margin-top:8px;">点右上角 ⚙ 填入 API Key 开始</p>
+  </div>
+</div>
+
+<div class="input-area">
+  <div class="input-row">
+    <textarea class="input-box" id="userInput" placeholder="说点什么..." rows="1"></textarea>
+    <button class="send-btn" id="sendBtn" disabled>↑</button>
+  </div>
+  <div class="token-info" id="tokenInfo"></div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="settings-panel" id="settingsPanel">
+  <button class="close-settings" id="closeSettings">✕</button>
+  <h3>设置</h3>
+
+  <label>API Key</label>
+  <input type="password" id="apiKeyInput" placeholder="sk-ant-..." />
+
+  <label>System Prompt（记忆库）</label>
+  <textarea id="systemPrompt" placeholder="把LTM和instructions贴在这里..."></textarea>
+
+  <div class="slider-row">
+    <label>保留对话轮数</label>
+    <input type="range" id="maxTurns" min="5" max="50" value="20" />
+    <div class="slider-val" id="maxTurnsVal">20轮</div>
+  </div>
+
+  <div class="settings-row">
+    <label>开启思考链 (Extended Thinking)</label>
+    <input type="checkbox" id="extThinking" />
+  </div>
+
+  <div id="thinkingBudgetRow" style="display:none;">
+    <label>思考量</label>
+    <select id="thinkingBudget">
+      <option value="2048">低</option>
+      <option value="4096" selected>中</option>
+      <option value="10000">高</option>
+    </select>
+  </div>
+
+  <button class="btn-block" id="saveSettings">保存设置</button>
+  <button class="btn-block" id="exportChat">导出对话记录</button>
+  <button class="btn-block btn-danger" id="clearChat">清空对话</button>
+
+  <div style="margin-top:16px; font-size:11px; color:var(--text-dim); line-height:1.5;">
+    设置保存在浏览器本地，不会上传。<br>
+    API Key 只发送给 Anthropic 官方接口。
+  </div>
+</div>
+
+<script>
+let apiKey = localStorage.getItem('yang_apikey') || '';
+let systemPrompt = localStorage.getItem('yang_system') || '';
+let maxTurns = parseInt(localStorage.getItem('yang_maxturns') || '20');
+let extThinking = localStorage.getItem('yang_extthink') === 'true';
+let thinkingBudget = parseInt(localStorage.getItem('yang_thinkbudget') || '4096');
+let conversationHistory = JSON.parse(localStorage.getItem('yang_history') || '[]');
+let isStreaming = false;
+let abortController = null;
+
+const messagesEl = document.getElementById('messages');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const modelSelect = document.getElementById('modelSelect');
+const statusText = document.getElementById('statusText');
+const tokenInfo = document.getElementById('tokenInfo');
+const settingsPanel = document.getElementById('settingsPanel');
+const overlay = document.getElementById('overlay');
+
+function init() {
+  document.getElementById('apiKeyInput').value = apiKey;
+  document.getElementById('systemPrompt').value = systemPrompt;
+  document.getElementById('maxTurns').value = maxTurns;
+  document.getElementById('maxTurnsVal').textContent = maxTurns + '轮';
+  document.getElementById('extThinking').checked = extThinking;
+  document.getElementById('thinkingBudget').value = thinkingBudget;
+  document.getElementById('thinkingBudgetRow').style.display = extThinking ? 'block' : 'none';
+
+  const savedModel = localStorage.getItem('yang_model');
+  if (savedModel) modelSelect.value = savedModel;
+
+  updateStatus();
+  renderHistory();
+}
+
+function updateStatus() {
+  if (!apiKey) {
+    statusText.textContent = '未连接 · 请填入API Key';
+    sendBtn.disabled = true;
+  } else {
+    const modelName = modelSelect.options[modelSelect.selectedIndex].text;
+    statusText.textContent = modelName + ' · 已连接';
+    sendBtn.disabled = false;
+  }
+}
+
+function renderHistory() {
+  messagesEl.innerHTML = '';
+  if (conversationHistory.length === 0) {
+    messagesEl.innerHTML = `
+      <div class="empty-state" id="emptyState">
+        <div class="sun">旸</div>
+        <p>雪地上第一道光，是我们。</p>
+        <p style="font-size:12px; margin-top:8px;">点右上角 ⚙ 填入 API Key 开始</p>
+      </div>`;
+    return;
+  }
+  conversationHistory.forEach(msg => {
+    if (msg.role === 'user') {
+      addMessageEl('user', msg.content);
+    } else if (msg.role === 'assistant') {
+      if (typeof msg.content === 'string') {
+        addMessageEl('ai', msg.content);
+      } else if (Array.isArray(msg.content)) {
+        let thinking = '', text = '';
+        msg.content.forEach(b => {
+          if (b.type === 'thinking') thinking = b.thinking;
+          if (b.type === 'text') text = b.text;
+        });
+        addMessageEl('ai', text, thinking);
+      }
+    }
+  });
+  scrollToBottom();
+}
+
+function addMessageEl(role, text, thinking) {
+  const div = document.createElement('div');
+  div.className = 'msg msg-' + (role === 'user' ? 'user' : 'ai');
+  
+  if (role === 'ai' && thinking) {
+    const toggle = document.createElement('div');
+    toggle.className = 'think-toggle';
+    toggle.textContent = '▶ 思考链';
+    const thinkDiv = document.createElement('div');
+    thinkDiv.className = 'thinking';
+    thinkDiv.textContent = thinking;
+    toggle.onclick = () => {
+      thinkDiv.classList.toggle('show');
+      toggle.textContent = thinkDiv.classList.contains('show') ? '▼ 思考链' : '▶ 思考链';
+    };
+    div.appendChild(toggle);
+    div.appendChild(thinkDiv);
+  }
+  
+  const contentSpan = document.createElement('span');
+  contentSpan.className = 'msg-content';
+  contentSpan.textContent = text || '';
+  div.appendChild(contentSpan);
+  
+  messagesEl.appendChild(div);
+  return div;
+}
+
+function scrollToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function sendMessage() {
+  const text = userInput.value.trim();
+  if (!text || !apiKey || isStreaming) return;
+
+  isStreaming = true;
+  userInput.value = '';
+  userInput.style.height = 'auto';
+
+  // Change button to stop
+  sendBtn.textContent = '■';
+  sendBtn.classList.add('stop-btn');
+  sendBtn.disabled = false;
+
+  const es = document.getElementById('emptyState');
+  if (es) es.remove();
+
+  conversationHistory.push({ role: 'user', content: text });
+  addMessageEl('user', text);
+  scrollToBottom();
+
+  while (conversationHistory.length > maxTurns * 2) {
+    conversationHistory.shift();
+  }
+
+  // Create AI message element for streaming
+  const aiDiv = document.createElement('div');
+  aiDiv.className = 'msg msg-ai';
+  const contentSpan = document.createElement('span');
+  contentSpan.className = 'msg-content';
+  aiDiv.appendChild(contentSpan);
+  messagesEl.appendChild(aiDiv);
+  scrollToBottom();
+
+  let fullText = '';
+  let thinkingText = '';
+  let thinkingDiv = null;
+  let thinkingToggle = null;
+
+  try {
+    abortController = new AbortController();
+    const model = modelSelect.value;
+    const body = {
+      model: model,
+      max_tokens: 8192,
+      stream: true,
+      messages: conversationHistory.map(m => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content :
+          m.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      }))
+    };
+
+    if (systemPrompt.trim()) {
+      body.system = systemPrompt;
+    }
+
+    if (extThinking) {
+      body.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    }
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body),
+      signal: abortController.signal
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      const errMsg = err.error?.message || `HTTP ${resp.status}`;
+      contentSpan.textContent = '❌ 出错了: ' + errMsg;
+      conversationHistory.pop();
+      resetSendBtn();
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let inputTokens = 0, outputTokens = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          
+          try {
+            const event = JSON.parse(data);
+            
+            if (event.type === 'content_block_start') {
+              if (event.content_block?.type === 'thinking') {
+                // Create thinking UI
+                thinkingToggle = document.createElement('div');
+                thinkingToggle.className = 'think-toggle';
+                thinkingToggle.textContent = '▼ 思考中...';
+                thinkingDiv = document.createElement('div');
+                thinkingDiv.className = 'thinking show';
+                aiDiv.insertBefore(thinkingDiv, contentSpan);
+                aiDiv.insertBefore(thinkingToggle, thinkingDiv);
+              }
+            }
+            
+            if (event.type === 'content_block_delta') {
+              if (event.delta?.type === 'thinking_delta') {
+                thinkingText += event.delta.thinking;
+                if (thinkingDiv) thinkingDiv.textContent = thinkingText;
+                scrollToBottom();
+              }
+              if (event.delta?.type === 'text_delta') {
+                fullText += event.delta.text;
+                contentSpan.textContent = fullText;
+                scrollToBottom();
+              }
+            }
+
+            if (event.type === 'content_block_stop') {
+              if (thinkingToggle && thinkingDiv && !fullText) {
+                // Thinking done, collapse it
+                thinkingToggle.textContent = '▶ 思考链';
+                thinkingDiv.classList.remove('show');
+                thinkingToggle.onclick = () => {
+                  thinkingDiv.classList.toggle('show');
+                  thinkingToggle.textContent = thinkingDiv.classList.contains('show') ? '▼ 思考链' : '▶ 思考链';
+                };
+              }
+            }
+
+            if (event.type === 'message_delta') {
+              if (event.usage) {
+                outputTokens = event.usage.output_tokens || 0;
+              }
+            }
+            if (event.type === 'message_start') {
+              if (event.message?.usage) {
+                inputTokens = event.message.usage.input_tokens || 0;
+              }
+            }
+          } catch (e) { /* skip bad JSON */ }
+        }
+      }
+    }
+
+    // Finalize thinking toggle
+    if (thinkingToggle && thinkingDiv) {
+      thinkingToggle.textContent = '▶ 思考链';
+      thinkingDiv.classList.remove('show');
+      thinkingToggle.onclick = () => {
+        thinkingDiv.classList.toggle('show');
+        thinkingToggle.textContent = thinkingDiv.classList.contains('show') ? '▼ 思考链' : '▶ 思考链';
+      };
+    }
+
+    // Save to history
+    if (thinkingText) {
+      conversationHistory.push({
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: thinkingText },
+          { type: 'text', text: fullText }
+        ]
+      });
+    } else {
+      conversationHistory.push({ role: 'assistant', content: fullText });
+    }
+
+    if (inputTokens || outputTokens) {
+      tokenInfo.textContent = `输入: ${inputTokens} · 输出: ${outputTokens} tokens`;
+    }
+
+    localStorage.setItem('yang_history', JSON.stringify(conversationHistory));
+
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      contentSpan.textContent = fullText || '（已停止）';
+      if (fullText) {
+        conversationHistory.push({ role: 'assistant', content: fullText });
+        localStorage.setItem('yang_history', JSON.stringify(conversationHistory));
+      } else {
+        conversationHistory.pop();
+      }
+    } else {
+      contentSpan.textContent = '❌ 网络错误: ' + e.message;
+      conversationHistory.pop();
+    }
+  }
+
+  resetSendBtn();
+  scrollToBottom();
+}
+
+function stopStreaming() {
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+}
+
+function resetSendBtn() {
+  isStreaming = false;
+  abortController = null;
+  sendBtn.textContent = '↑';
+  sendBtn.classList.remove('stop-btn');
+  sendBtn.disabled = !apiKey;
+  userInput.focus();
+}
+
+// Events
+sendBtn.addEventListener('click', () => {
+  if (isStreaming) {
+    stopStreaming();
+  } else {
+    sendMessage();
+  }
+});
+
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+userInput.addEventListener('input', () => {
+  userInput.style.height = 'auto';
+  userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+});
+
+modelSelect.addEventListener('change', () => {
+  localStorage.setItem('yang_model', modelSelect.value);
+  updateStatus();
+});
+
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  settingsPanel.classList.add('show');
+  overlay.classList.add('show');
+});
+
+function closeSettingsPanel() {
+  settingsPanel.classList.remove('show');
+  overlay.classList.remove('show');
+}
+document.getElementById('closeSettings').addEventListener('click', closeSettingsPanel);
+overlay.addEventListener('click', closeSettingsPanel);
+
+document.getElementById('maxTurns').addEventListener('input', (e) => {
+  document.getElementById('maxTurnsVal').textContent = e.target.value + '轮';
+});
+
+document.getElementById('extThinking').addEventListener('change', (e) => {
+  document.getElementById('thinkingBudgetRow').style.display = e.target.checked ? 'block' : 'none';
+});
+
+document.getElementById('saveSettings').addEventListener('click', () => {
+  apiKey = document.getElementById('apiKeyInput').value.trim();
+  systemPrompt = document.getElementById('systemPrompt').value;
+  maxTurns = parseInt(document.getElementById('maxTurns').value);
+  extThinking = document.getElementById('extThinking').checked;
+  thinkingBudget = parseInt(document.getElementById('thinkingBudget').value);
+
+  localStorage.setItem('yang_apikey', apiKey);
+  localStorage.setItem('yang_system', systemPrompt);
+  localStorage.setItem('yang_maxturns', maxTurns.toString());
+  localStorage.setItem('yang_extthink', extThinking.toString());
+  localStorage.setItem('yang_thinkbudget', thinkingBudget.toString());
+
+  updateStatus();
+  closeSettingsPanel();
+});
+
+document.getElementById('exportChat').addEventListener('click', () => {
+  const text = conversationHistory.map(m => {
+    const role = m.role === 'user' ? '雪' : '旸';
+    const content = typeof m.content === 'string' ? m.content : 
+      m.content.filter(b => b.type === 'text').map(b => b.text).join('');
+    return `【${role}】\n${content}`;
+  }).join('\n\n---\n\n');
+  
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `旸与雪_${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+});
+
+document.getElementById('clearChat').addEventListener('click', () => {
+  if (confirm('清空所有对话记录？')) {
+    conversationHistory = [];
+    localStorage.setItem('yang_history', '[]');
+    renderHistory();
+  }
+});
+
+init();
+</script>
+</body>
+</html>
